@@ -1,0 +1,70 @@
+name: Build Modern Buttons 2027 APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android_project/app/src/main/assets/www/modern-buttons-2027.css'
+      - '.github/workflows/build-modern-buttons-2027.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject 2027 button stylesheet for this build only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android_project/app/src/main/assets/www/index.html')
+          s=p.read_text(encoding='utf-8')
+          tag='<link id="rihlaModernButtons2027" rel="stylesheet" href="modern-buttons-2027.css">'
+          if 'rihlaModernButtons2027' not in s:
+              s=s.replace('</head>',tag+'\n</head>',1)
+          p.write_text(s,encoding='utf-8')
+          print('2027 stylesheet injected')
+          PY
+
+      - name: Verify no duplicate 2027 stylesheet
+        run: |
+          test "$(grep -o 'rihlaModernButtons2027' android_project/app/src/main/assets/www/index.html | wc -l)" -eq 1
+          test -f android_project/app/src/main/assets/www/modern-buttons-2027.css
+          grep -q '#rihlaExitApp' android_project/app/src/main/assets/www/modern-buttons-2027.css
+          grep -q 'display:none!important' android_project/app/src/main/assets/www/modern-buttons-2027.css
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
+      - name: Build debug APK
+        run: gradle --no-daemon :app:assembleDebug
+        working-directory: android_project
+      - name: Verify APK
+        shell: bash
+        run: |
+          unzip -p android_project/app/build/outputs/apk/debug/app-debug.apk assets/www/index.html > /tmp/index.html
+          grep -q 'rihlaModernButtons2027' /tmp/index.html
+          grep -q 'modern-buttons-2027.css' /tmp/index.html
+          test -s android_project/app/build/outputs/apk/debug/app-debug.apk
+          echo 'APK VERIFIED: 2027 buttons + light palette + hidden legacy colors + red end exit'
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rihla-thanaweya-2027-modern-buttons
+          path: android_project/app/build/outputs/apk/debug/app-debug.apk

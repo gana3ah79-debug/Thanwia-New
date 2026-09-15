@@ -1,0 +1,19 @@
+name: Fix Supabase API Key and Build APK
+
+# Disabled on normal pushes so this legacy fixer cannot overwrite the current
+# application source with an outdated API key. Run manually only when needed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fix-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build using the canonical Android APK workflow configuration
+        run: echo 'Legacy fixer is manual-only; use android-apk.yml for the current build.'

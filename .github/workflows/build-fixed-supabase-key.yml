@@ -1,0 +1,16 @@
+name: Build APK with correct Supabase key
+
+# Obsolete duplicate workflow disabled. The canonical android-apk.yml is the only
+# automatic APK build and uses the verified current Supabase publishable key.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo 'Obsolete duplicate build disabled; use android-apk.yml.'

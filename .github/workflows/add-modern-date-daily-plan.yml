@@ -1,0 +1,92 @@
+name: Add modern date time and smart daily plan
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[auto-date-plan]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add modern date and daily plan
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('android_project/app/src/main/assets/www/index.html')
+          s=p.read_text(encoding='utf-8')
+          marker='/* RIhla modern date and smart daily plan v1 */'
+          if marker in s:
+              print('Already installed')
+              raise SystemExit(0)
+          css=r'''<style>
+          .modern-datetime{background:linear-gradient(135deg,#071d3a,#1268c7);color:#fff;border-radius:22px;padding:16px;margin-bottom:14px;box-shadow:0 12px 28px rgba(7,29,58,.18);position:relative;overflow:hidden}.modern-datetime:after{content:"✦";position:absolute;left:18px;bottom:-18px;font-size:92px;opacity:.09}.modern-datetime .date-line{font-size:13px;color:#d8e9ff;margin-bottom:7px}.modern-datetime .time-line{font-size:31px;font-weight:900;letter-spacing:1px}.modern-datetime .day-line{font-size:12px;color:#bfe0ff;margin-top:5px}.daily-plan{border-radius:22px;background:#fff;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}.daily-plan-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}.daily-plan-title{font-size:18px;font-weight:900}.daily-plan-sub{font-size:12px;color:var(--muted);margin-top:3px}.plan-task{display:flex;align-items:center;gap:11px;padding:12px 0;border-bottom:1px solid #edf0f5}.plan-task:last-child{border-bottom:0}.plan-num{width:35px;height:35px;border-radius:12px;background:#eef4ff;color:#246bff;display:grid;place-items:center;font-weight:900;flex:0 0 auto}.plan-icon{font-size:24px;flex:0 0 auto}.plan-info{flex:1;min-width:0}.plan-info b{display:block;font-size:14px}.plan-info span{display:block;font-size:11px;color:var(--muted);margin-top:3px}.plan-time{font-size:11px;font-weight:800;color:#246bff;white-space:nowrap}.plan-note{background:#f5f8fc;border-radius:14px;padding:10px;font-size:11px;color:#607087;margin-top:11px}
+          </style>'''
+          if '</head>' not in s: raise SystemExit('head not found')
+          s=s.replace('</head>',css+'\n</head>',1)
+          home='<section id="home"'
+          pos=s.find(home)
+          if pos<0: raise SystemExit('home section not found')
+          top_end=s.find('</div>',s.find('<div class="top">',pos))
+          # Insert after the home top block by finding its closing section-top div via the known first content marker.
+          content_pos=s.find('<div class="content">',pos)
+          if content_pos<0: raise SystemExit('home content not found')
+          datetime_html='<div id="modernDateTime" class="modern-datetime"><div class="date-line" id="modernDate">—</div><div class="time-line" id="modernTime">--:--</div><div class="day-line" id="modernDay">جاهز لرحلتك اليوم ✨</div></div>'
+          plan_html='''<div id="smartDailyPlan" class="daily-plan"><div class="daily-plan-head"><div><div class="daily-plan-title">📅 خطة اليوم</div><div class="daily-plan-sub" id="dailyPlanSubtitle">مذاكرة • مراجعة • تدريب — بترتيب مناسب لليوم</div></div><span class="pill" id="dailyPlanBadge">اليوم</span></div><div id="dailyPlanTasks"></div><div class="plan-note" id="dailyPlanNote">الخطة تتغير تلقائيًا حسب اليوم والمواد التي اخترتها.</div></div>'''
+          insert=datetime_html+plan_html
+          if 'id="modernDateTime"' not in s:
+              s=s[:content_pos+len('<div class="content">')]+insert+s[content_pos+len('<div class="content">'):]
+          js=r'''<script>
+          /* RIhla modern date and smart daily plan v1 */
+          (function(){
+            const dayNames=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+            const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+            function updateModernDateTime(){
+              const d=new Date(),dateEl=document.getElementById('modernDate'),timeEl=document.getElementById('modernTime'),dayEl=document.getElementById('modernDay');
+              if(!dateEl||!timeEl)return;
+              const hh=String(d.getHours()).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0');
+              dateEl.textContent=`${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+              timeEl.textContent=`${hh}:${mm}`;
+              if(dayEl)dayEl.textContent=`${dayNames[d.getDay()]} • وقتك اليوم مهم، ابدأ بخطوة صغيرة ✨`;
+            }
+            function renderSmartDailyPlan(){
+              const box=document.getElementById('dailyPlanTasks'),badge=document.getElementById('dailyPlanBadge'),sub=document.getElementById('dailyPlanSubtitle'),note=document.getElementById('dailyPlanNote');
+              if(!box)return;
+              const d=new Date(),day=d.getDay();
+              const subjects=(window.subjects&&window.subjects.length?window.subjects.map(x=>Array.isArray(x)?x[1]:x):((window.state&&state.selected)||[]));
+              const names=subjects.length?subjects:['المادة الأساسية'];
+              const h=Math.max(1,Number(window.state&&state.hours||6));
+              const orders=[['مذاكرة','تدريب','مراجعة'],['مذاكرة','مراجعة','تدريب'],['تدريب','مذاكرة','مراجعة'],['مراجعة','مذاكرة','تدريب'],['مذاكرة','تدريب','مراجعة'],['مراجعة','تدريب','مذاكرة'],['مراجعة','تدريب','مذاكرة']];
+              const icons={'مذاكرة':'📚','مراجعة':'🔄','تدريب':'🎯'};
+              const desc={'مذاكرة':'شرح وفهم جزء جديد من المنهج','مراجعة':'استرجاع سريع لما سبق بدون النظر للكتاب','تدريب':'أسئلة امتحانية وتطبيق على ما ذاكرت'};
+              const order=orders[day];
+              const weights=day===5||day===6?[.30,.30,.40]:[.45,.25,.30];
+              const mins=[Math.max(15,Math.round(h*60*weights[0])),Math.max(15,Math.round(h*60*weights[1])),Math.max(15,Math.round(h*60*weights[2]))];
+              const total=mins.reduce((a,b)=>a+b,0),scale=h*60/total;
+              const finalMins=mins.map(x=>Math.max(15,Math.round(x*scale)));
+              box.innerHTML=order.map((type,i)=>{const subject=names[(day+i)%names.length];return `<div class="plan-task"><div class="plan-num">${i+1}</div><div class="plan-icon">${icons[type]}</div><div class="plan-info"><b>${type} — ${escapeHtml(subject)}</b><span>${desc[type]}</span></div><div class="plan-time">${finalMins[i]} دقيقة</div></div>`}).join('');
+              if(badge)badge.textContent=dayNames[day];
+              if(sub)sub.textContent=`${order.join(' • ')} — ترتيب ${dayNames[day]}`;
+              if(note)note.textContent=day===5||day===6?'اليوم أخف: ركّز على تثبيت المعلومات وحل أسئلة قصيرة.':'ابدأ بالمهمة الأولى، وبعد كل جزء خذ راحة قصيرة ثم انتقل للتالية.';
+            }
+            window.setInterval(updateModernDateTime,1000); updateModernDateTime();
+            document.addEventListener('DOMContentLoaded',renderSmartDailyPlan);
+            const oldShow=window.show;
+            if(typeof oldShow==='function'){window.show=function(id){const r=oldShow.apply(this,arguments);if(id==='home')setTimeout(renderSmartDailyPlan,30);return r;};}
+            setTimeout(renderSmartDailyPlan,500);
+          })();
+          </script>'''
+          s=s.replace('</body>',js+'\n</body>',1)
+          p.write_text(s,encoding='utf-8')
+          print('Modern date/time and smart daily plan installed')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android_project/app/src/main/assets/www/index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Add modern date time and smart daily plan [auto-date-plan]'
+          git push

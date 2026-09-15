@@ -1,0 +1,1 @@
+Fresh APK build requested on 2026-09-10. Friend Challenge V3 UI fix: join-code field must display all 6 characters, accept Arabic/Latin digits, and normalize pasted codes; share/copy controls must appear only on a generated challenge code, never on the join form. Preserve all unrelated modules and navigation.

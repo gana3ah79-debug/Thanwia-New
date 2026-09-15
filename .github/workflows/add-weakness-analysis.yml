@@ -1,0 +1,46 @@
+name: Add weakness analysis
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[auto-weakness]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add weakness analysis
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('android_project/app/src/main/assets/www/index.html')
+          s=p.read_text(encoding='utf-8')
+          marker="<div class=\"card bars\"><b>أداؤك في المواد</b>"
+          card='''<div class="card"><div class="row"><b>🧠 اكتشف ضعفك</b><span class="pill" id="weaknessType">لم نحلل بعد</span></div><p id="weaknessSummary" class="muted">بعد كل اختبار سنحلل أخطاءك ونحدد نوع الضعف الأكثر تكرارًا.</p><div id="weaknessGrid" class="skill-grid" style="margin-top:10px"></div><div class="card" style="background:#f7f9fc;margin:12px 0 0;padding:12px"><b>🎯 تدريب مقترح</b><p id="weaknessAdvice" class="muted" style="margin:7px 0 0">حل اختبارًا واحدًا على الأقل لتظهر التوصية.</p></div></div>'''
+          if 'id="weaknessType"' not in s:
+              s=s.replace(marker, card+marker, 1)
+          js_marker='function renderAnalysis(){'
+          js='''function classifyError(reason){const r=String(reason||'').toLowerCase();if(/حساب|رقم|معادلة/.test(r))return 'حساب';if(/قراءة|سؤال|فهم السؤال/.test(r))return 'قراءة السؤال';if(/استعجال|سرعة/.test(r))return 'استعجال';if(/حفظ|معلومة/.test(r))return 'حفظ';if(/طريقة|منهج|خطوات/.test(r))return 'طريقة الحل';return 'فهم';}
+          function getWeaknessAnalysis(){const arr=state.errorLog||[],types=['فهم','حفظ','حساب','استعجال','قراءة السؤال','طريقة الحل'],counts={};types.forEach(t=>counts[t]=0);arr.forEach(e=>{const t=classifyError(e.reason);counts[t]=(counts[t]||0)+1});const ranked=types.map(t=>({type:t,count:counts[t]})).sort((a,b)=>b.count-a.count);return {ranked,total:arr.length,top:ranked[0]};}
+          function renderWeaknessAnalysis(){const a=getWeaknessAnalysis(),badge=document.getElementById('weaknessType'),summary=document.getElementById('weaknessSummary'),grid=document.getElementById('weaknessGrid'),advice=document.getElementById('weaknessAdvice');if(!badge||!summary||!grid||!advice)return;if(!a.total){badge.textContent='لم نحلل بعد';summary.textContent='بعد كل اختبار سنحلل أخطاءك ونحدد نوع الضعف الأكثر تكرارًا.';grid.innerHTML='';advice.textContent='حل اختبارًا واحدًا على الأقل لتظهر التوصية.';return}badge.textContent='الأكثر تكرارًا: '+a.top.type;summary.textContent=`سجلنا ${a.total} خطأ. نقطة الضعف الحالية هي ${a.top.type} (${a.top.count} أخطاء).`;grid.innerHTML=a.ranked.filter(x=>x.count>0).map(x=>`<div class="skill-box"><b>${x.type}</b><div class="muted">${x.count} خطأ</div></div>`).join('');const adviceMap={'فهم':'اقرأ الدرس مرة أخرى ثم اشرح الفكرة بصوتك وحل 5 أسئلة سهلة قبل الصعب.','حفظ':'استخدم الاسترجاع النشط: أغلق الكتاب واكتب ما تتذكره ثم راجع الناقص.','حساب':'اكتب المعطيات والقانون والخطوات قبل اختيار الإجابة، ثم راجع الوحدات والنتيجة.','استعجال':'توقف 10 ثوانٍ قبل الإجابة، واقرأ السؤال والاختيارات مرة ثانية.','قراءة السؤال':'حدد المطلوب والمعطيات والكلمات المهمة في السؤال قبل الحل.','طريقة الحل':'راجع خطوات الحل النموذجية ثم حل سؤالًا مشابهًا دون النظر للحل.'};advice.textContent=adviceMap[a.top.type]||adviceMap['فهم'];}
+          function markErrorReviewed(id){const e=(state.errorLog||[]).find(x=>x.id===id);if(!e||e.reviewed)return;e.reviewed=true;state.errorReviewed=(state.errorReviewed||0)+1;save();renderAnalysis();toast('تمت مراجعة الخطأ وتسجيل تحسنك ✅');}
+          '''
+          if 'function renderWeaknessAnalysis()' not in s:
+              s=s.replace(js_marker,js+js_marker,1)
+          s=s.replace("function renderAnalysis(){const p=", "function renderAnalysis(){renderWeaknessAnalysis();const p=", 1)
+          old="<div class=\"muted\" style=\"margin-top:4px\">${escapeHtml(e.reason||'خطأ في الإجابة')} ${e.reviewed?' · ✅ تمت المراجعة':''}</div></div>"
+          new="<div class=\"muted\" style=\"margin-top:4px\">${escapeHtml(e.reason||'خطأ في الإجابة')} ${e.reviewed?' · ✅ تمت المراجعة':''}</div>${e.reviewed?'':'<button class=\"btn secondary\" style=\"margin-top:8px;padding:9px\" onclick=\"markErrorReviewed(\\''+e.id+'\\')\">🔄 راجعت الخطأ</button>'}</div>"
+          if 'markErrorReviewed' in s and 'راجعت الخطأ' not in s:
+              s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit patched app
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android_project/app/src/main/assets/www/index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Add weakness analysis [auto-weakness]"
+          git push
+# Trigger the Android build on the patched main branch.
