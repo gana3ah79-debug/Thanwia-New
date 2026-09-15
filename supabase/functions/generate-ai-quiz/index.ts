@@ -6,18 +6,17 @@ const cors = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-5.6-terra';
-const OPENAI_URL = 'https://api.openai.com/v1/responses';
+// Gemini 2.5 Flash-Lite has a free tier and supports structured JSON output.
+const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const schema = {
   type: 'object',
-  additionalProperties: false,
   properties: {
     questions: {
       type: 'array',
       items: {
         type: 'object',
-        additionalProperties: false,
         properties: {
           stem: { type: 'string' },
           options: { type: 'array', items: { type: 'string' }, minItems: 4, maxItems: 4 },
@@ -54,15 +53,22 @@ function validateQuestion(q: any) {
   return true;
 }
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, 'Content-Type': 'application/json' },
+  });
+}
+
 async function main(req: Request) {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
-  if (req.method !== 'POST') return new Response(JSON.stringify({error:'POST only'}), { status: 405, headers: {...cors, 'Content-Type':'application/json'} });
+  if (req.method !== 'POST') return jsonResponse({ error: 'POST only' }, 405);
 
-  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  const geminiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY');
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!openaiKey || !supabaseUrl || !serviceKey) {
-    return new Response(JSON.stringify({error:'AI service is not configured'}), { status: 500, headers: {...cors, 'Content-Type':'application/json'} });
+  if (!geminiKey || !supabaseUrl || !serviceKey) {
+    return jsonResponse({ error: 'AI service is not configured. Add GEMINI_API_KEY to Supabase Secrets.' }, 500);
   }
 
   const body = await req.json();
@@ -73,7 +79,8 @@ async function main(req: Request) {
   const difficulty = String(body.difficulty || 'medium');
   const count = Math.min(Math.max(Number(body.count || 10), 1), 20);
   const userId = body.user_id || null;
-  if (!subject) return new Response(JSON.stringify({error:'subject is required'}), {status:400, headers:{...cors,'Content-Type':'application/json'}});
+
+  if (!subject) return jsonResponse({ error: 'subject is required' }, 400);
 
   const sb = createClient(supabaseUrl, serviceKey);
   const { data: sources } = await sb.from('ai_source_documents')
@@ -91,59 +98,105 @@ async function main(req: Request) {
     .limit(200);
 
   const sourceContext = (sources || []).map((s: any) => ({
-    title:s.title, type:s.source_type, year:s.school_year, branch:s.branch, url:s.url,
-    content:s.content ? s.content.slice(0, 12000) : null,
+    title: s.title,
+    type: s.source_type,
+    year: s.school_year,
+    branch: s.branch,
+    url: s.url,
+    content: s.content ? s.content.slice(0, 12000) : null,
   }));
   const avoid = (existing || []).slice(0, 80).map((q: any) => q.stem).join('\n- ');
 
-  const instructions = `أنت محرك أسئلة لتطبيق "رحلة الثانوية" للصف الثالث الثانوي المصري.\n\n` +
-`مهمتك: إنشاء أسئلة أصلية جديدة، وليست نسخًا حرفيًا من أي كتاب أو منصة أو امتحان.\n` +
-`ابنِ السؤال من المفهوم والمهارة ونمط التقييم الموجود في المصادر المرجعية. لا تنسب نصًا محميًا أو سؤالًا بعينه إلى مصدر.\n` +
-`الالتزام الصارم بمنهج الصف الثالث الثانوي المصري والشعبة المطلوبة. ممنوع إدخال معلومات جامعية أو خارج المنهج.\n` +
-`كل سؤال MCQ له 4 اختيارات وإجابة صحيحة واحدة فقط. المشتتات يجب أن تكون أخطاء شائعة منطقية وليست عشوائية.\n` +
-`نوّع الصعوبة ومستوى التفكير، وغيّر السياق والأرقام والترتيب حتى لا تتكرر الأسئلة.\n` +
-`إذا كانت المصادر غير كافية لتحديد معلومة منهجية، لا تخترعها؛ استخدم فقط ما يمكن دعمه بالمراجع المتاحة.\n` +
-`أعد JSON مطابقًا للمخطط المطلوب فقط.`;
+  const instructions = `أنت محرك أسئلة لتطبيق "رحلة الثانوية" للصف الثالث الثانوي المصري.
+
+` +
+    `مهمتك: إنشاء أسئلة أصلية جديدة، وليست نسخًا حرفيًا من أي كتاب أو منصة أو امتحان.
+` +
+    `ابنِ السؤال من المفهوم والمهارة ونمط التقييم الموجود في المصادر المرجعية. لا تنسب نصًا محميًا أو سؤالًا بعينه إلى مصدر.
+` +
+    `الالتزام الصارم بمنهج الصف الثالث الثانوي المصري والشعبة المطلوبة. ممنوع إدخال معلومات جامعية أو خارج المنهج.
+` +
+    `كل سؤال MCQ له 4 اختيارات وإجابة صحيحة واحدة فقط. المشتتات يجب أن تكون أخطاء شائعة منطقية وليست عشوائية.
+` +
+    `نوّع الصعوبة ومستوى التفكير، وغيّر السياق والأرقام والترتيب حتى لا تتكرر الأسئلة.
+` +
+    `إذا كانت المصادر غير كافية لتحديد معلومة منهجية، لا تخترعها؛ استخدم فقط ما يمكن دعمه بالمراجع المتاحة.
+` +
+    `أعد JSON مطابقًا للمخطط المطلوب فقط.`;
 
   const userInput = {
-    request: { subject, grade:'الصف الثالث الثانوي', branch, unit, lesson, difficulty, count },
+    request: { subject, grade: 'الصف الثالث الثانوي', branch, unit, lesson, difficulty, count },
     reference_sources: sourceContext,
     already_generated_to_avoid: avoid,
   };
 
-  const run = await sb.from('ai_generation_runs').insert({ user_id:userId, subject, grade:'الصف الثالث الثانوي', branch, unit, lesson, difficulty, count_requested:count, model:MODEL }).select('id').single();
+  const run = await sb.from('ai_generation_runs').insert({
+    user_id: userId,
+    subject,
+    grade: 'الصف الثالث الثانوي',
+    branch,
+    unit,
+    lesson,
+    difficulty,
+    count_requested: count,
+    model: MODEL,
+  }).select('id').single();
   const runId = run.data?.id || null;
 
-  const ai = await fetch(OPENAI_URL, {
-    method:'POST',
-    headers:{'Authorization':`Bearer ${openaiKey}`,'Content-Type':'application/json'},
-    body:JSON.stringify({
-      model: MODEL,
-      reasoning: { effort: 'medium' },
-      instructions,
-      input: JSON.stringify(userInput),
-      text: { format: { type:'json_schema', name:'thanwia_quiz', strict:true, schema } },
-      temperature: 0.7,
-      store: false,
+  const prompt = `${instructions}\n\nبيانات الطلب والمراجع:\n${JSON.stringify(userInput, null, 2)}`;
+
+  const ai = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: {
+      'x-goog-api-key': geminiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        response_mime_type: 'application/json',
+        response_schema: schema,
+        temperature: 0.7,
+      },
     }),
   });
 
   const raw = await ai.text();
   if (!ai.ok) {
-    if (runId) await sb.from('ai_generation_runs').update({status:'failed',error_message:raw.slice(0,2000)}).eq('id',runId);
-    return new Response(JSON.stringify({error:'OpenAI generation failed', detail:raw.slice(0,2000)}), {status:502, headers:{...cors,'Content-Type':'application/json'}});
+    if (runId) await sb.from('ai_generation_runs').update({ status: 'failed', error_message: raw.slice(0, 2000) }).eq('id', runId);
+    return jsonResponse({ error: 'Gemini generation failed', detail: raw.slice(0, 2000) }, 502);
   }
 
-  const response = JSON.parse(raw);
+  let response: any;
+  try {
+    response = JSON.parse(raw);
+  } catch {
+    if (runId) await sb.from('ai_generation_runs').update({ status: 'failed', error_message: 'Invalid Gemini response JSON' }).eq('id', runId);
+    return jsonResponse({ error: 'Invalid Gemini response' }, 502);
+  }
+
+  const outputText = response?.candidates?.[0]?.content?.parts
+    ?.map((part: any) => part?.text || '')
+    .join('')
+    .trim();
+
+  if (!outputText) {
+    const detail = response?.promptFeedback || response?.candidates?.[0]?.finishReason || 'No text returned';
+    if (runId) await sb.from('ai_generation_runs').update({ status: 'failed', error_message: JSON.stringify(detail).slice(0, 2000) }).eq('id', runId);
+    return jsonResponse({ error: 'Gemini returned no usable output', detail }, 502);
+  }
+
   let parsed: any;
-  try { parsed = JSON.parse(response.output_text); } catch {
-    if (runId) await sb.from('ai_generation_runs').update({status:'failed',error_message:'Invalid structured output'}).eq('id',runId);
-    return new Response(JSON.stringify({error:'Invalid AI output'}), {status:502, headers:{...cors,'Content-Type':'application/json'}});
+  try {
+    parsed = JSON.parse(outputText);
+  } catch {
+    if (runId) await sb.from('ai_generation_runs').update({ status: 'failed', error_message: 'Invalid structured output from Gemini' }).eq('id', runId);
+    return jsonResponse({ error: 'Invalid AI output' }, 502);
   }
 
   const clean = (parsed.questions || []).filter(validateQuestion);
   const seen = new Set<string>();
-  const fresh = clean.filter((q:any) => {
+  const fresh = clean.filter((q: any) => {
     const fp = fingerprint(q);
     if (seen.has(fp)) return false;
     seen.add(fp);
@@ -152,18 +205,33 @@ async function main(req: Request) {
 
   for (const q of fresh) {
     await sb.from('ai_generated_questions').insert({
-      subject, grade:'الصف الثالث الثانوي', branch, unit:q.unit || unit, lesson:q.lesson || lesson,
-      concept:q.concept, skill:q.skill, question_type:'mcq', difficulty:q.difficulty,
-      cognitive_level:q.cognitive_level, stem:q.stem, options:q.options,
-      correct_option:q.correct_option, explanation:q.explanation, common_mistake:q.common_mistake,
-      estimated_seconds:q.estimated_seconds, fingerprint:fingerprint(q), quality_score:95,
-      status:'approved', model:MODEL, generation_run_id:runId,
+      subject,
+      grade: 'الصف الثالث الثانوي',
+      branch,
+      unit: q.unit || unit,
+      lesson: q.lesson || lesson,
+      concept: q.concept,
+      skill: q.skill,
+      question_type: 'mcq',
+      difficulty: q.difficulty,
+      cognitive_level: q.cognitive_level,
+      stem: q.stem,
+      options: q.options,
+      correct_option: q.correct_option,
+      explanation: q.explanation,
+      common_mistake: q.common_mistake,
+      estimated_seconds: q.estimated_seconds,
+      fingerprint: fingerprint(q),
+      quality_score: 95,
+      status: 'approved',
+      model: MODEL,
+      generation_run_id: runId,
     });
   }
 
-  if (runId) await sb.from('ai_generation_runs').update({status:'completed',count_generated:fresh.length}).eq('id',runId);
+  if (runId) await sb.from('ai_generation_runs').update({ status: 'completed', count_generated: fresh.length }).eq('id', runId);
 
-  return new Response(JSON.stringify({questions:fresh, model:MODEL, generated:fresh.length}), {headers:{...cors,'Content-Type':'application/json'}});
+  return jsonResponse({ questions: fresh, model: MODEL, generated: fresh.length });
 }
 
 Deno.serve(main);
