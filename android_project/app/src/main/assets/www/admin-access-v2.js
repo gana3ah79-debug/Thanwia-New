@@ -1,6 +1,6 @@
 (function(){'use strict';
 if(window.__rihlaAdminAccessV3)return;window.__rihlaAdminAccessV3=true;
-const URL='https://aenuzbaqskhyqwatrggg.supabase.co',KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0',ADMIN_EMAIL='hamadanagy1979@gmail.com';
+const URL='https://YOUR-THANWIA-NEW-PROJECT.supabase.co',KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0',ADMIN_EMAIL='hamadanagy1979@gmail.com';
 function client(){try{if(window.supabaseClient?.auth?.getSession)return window.supabaseClient}catch(e){}try{return window.supabase?.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage}})}catch(e){return null}}
 function loadFriendsChallenge(){if(document.getElementById('rihlaFriendsChallengeV4'))return;const s=document.createElement('script');s.id='rihlaFriendsChallengeV4';s.src='file:///android_asset/www/friends-challenge-v4.js';document.body.appendChild(s)}
 function cleanLegacy(){document.querySelectorAll('#rihlaThemeToggle,#rihlaExitEntry,#rihlaExitOverlay,.rihla-exit-entry,.rihla-exit-overlay').forEach(e=>e.remove())}

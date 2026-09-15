@@ -1,5 +1,5 @@
 (function(){'use strict';
-const URL='https://aenuzbaqskhyqwatrggg.supabase.co',KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0';
+const URL='https://YOUR-THANWIA-NEW-PROJECT.supabase.co',KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0';
 let db=null,sub=null,isAdmin=false;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const fmt=v=>v?new Date(v).toLocaleDateString('ar-EG',{year:'numeric',month:'long',day:'numeric'}):'—';

@@ -1,6 +1,6 @@
 (function(){'use strict';
 if(window.__rihlaHomeLogoutSafeV2)return;window.__rihlaHomeLogoutSafeV2=true;
-const URL='https://aenuzbaqskhyqwatrggg.supabase.co',KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0';
+const URL='https://YOUR-THANWIA-NEW-PROJECT.supabase.co',KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0';
 function client(){try{if(window.supabaseClient?.auth?.signOut)return window.supabaseClient}catch(e){}try{return window.supabase?.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage}})}catch(e){return null}}
 function visible(el){if(!el)return false;const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'}
 function findStart(){const h=document.getElementById('home');if(!h)return null;const els=h.querySelectorAll('button,a,[role="button"]');for(const el of els){const t=(el.textContent||'').replace(/\s+/g,' ').trim();if(visible(el)&&(/ابدأ\s*10\s*دقائق/.test(t)||/10\s*دقائق/.test(t)))return el}return null}

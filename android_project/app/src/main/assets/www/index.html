@@ -64,8 +64,6 @@ button.btn:active,.btn:active,.nav .plus:active,.icon-btn:active,.tab:active,.an
 @media(min-width:600px){.app{max-width:680px}.grid{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}.nav{width:min(680px,100%)}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
-
-<script src="thanwia-new-config.js"></script>
 </head>
 <body>
 <div class="app">
@@ -88,7 +86,7 @@ button.btn:active,.btn:active,.nav .plus:active,.icon-btn:active,.tab:active,.an
 <div id="authGate" class="auth-gate"><div class="auth-box"><h2>تسجيل الدخول</h2><p class="muted">سجّل دخولك لحفظ تقدمك وتشغيل التحديات.</p><input id="authName" class="input" placeholder="الاسم"><input id="authEmail" class="input" type="email" placeholder="البريد الإلكتروني"><input id="authPassword" class="input" type="password" placeholder="كلمة المرور"><button class="btn" onclick="authSignIn()">تسجيل الدخول</button><button class="btn secondary" style="margin-top:9px" onclick="authSignUp()">إنشاء حساب</button><p id="authMsg" class="muted" style="margin-top:10px"></p></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL='https://aenuzbaqskhyqwatrggg.supabase.co',SUPABASE_KEY='sb_publishable_FqI5heK77syr-3QH2LPHg_E82vbq-0';
+const SUPABASE_URL='https://YOUR-THANWIA-NEW-PROJECT.supabase.co',SUPABASE_KEY='sb_publishable_FqI5heK77syr-3QH2LPHg_E82vbq-0';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let realtimeLobby=null,realtimeInvite=null,realtimeChallenge=null,leaderboardTimer=null,myPresenceId=localStorage.getItem('rihlaPresenceId')||crypto.randomUUID();localStorage.setItem('rihlaPresenceId',myPresenceId);let friendCode=myPresenceId.slice(0,6).toUpperCase();
 const subjectSets={'علوم':[['📖','اللغة العربية'],['🌐','اللغة الإنجليزية'],['🧬','الأحياء'],['🧪','الكيمياء'],['⚡','الفيزياء']], 'رياضة':[['📖','اللغة العربية'],['🌐','اللغة الإنجليزية'],['📐','الرياضيات'],['🧪','الكيمياء'],['⚡','الفيزياء']], 'أدبي':[['📖','اللغة العربية'],['🌐','اللغة الإنجليزية'],['🏛️','التاريخ'],['🌍','الجغرافيا'],['📊','الإحصاء']]};
@@ -320,6 +318,5 @@ renderSubjects();document.getElementById('examDate').value=state.examDate||'';co
 </script>
 
 <script src="ai-question-engine.js"></script>
-
 <script src="thanwia-ai-bridge.js"></script>
 </body></html>

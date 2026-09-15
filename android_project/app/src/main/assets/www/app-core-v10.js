@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 if(window.__rihlaCoreV10)return;window.__rihlaCoreV10=true;
-const SB_URL='https://aenuzbaqskhyqwatrggg.supabase.co';
+const SB_URL='https://YOUR-THANWIA-NEW-PROJECT.supabase.co';
 const SB_KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0';
 let db=null,current='auth',busy=false,authBound=false;
 function client(){if(db)return db;try{if(window.supabase?.createClient)db=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage}})}catch(e){console.warn('auth client',e)}return db}

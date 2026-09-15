@@ -2,7 +2,7 @@
 'use strict';
 if(window.__friendChallengeV2)return;
 window.__friendChallengeV2=true;
-const SB_URL='https://aenuzbaqskhyqwatrggg.supabase.co';
+const SB_URL='https://YOUR-THANWIA-NEW-PROJECT.supabase.co';
 const SB_KEY='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0';
 const AI_URL=SB_URL+'/functions/v1/ai-quiz-v2';
 const SUBJECTS=['اللغة العربية','اللغة الإنجليزية','الفيزياء','الكيمياء','الأحياء','الرياضيات البحتة','الرياضيات التطبيقية','الإحصاء'];
