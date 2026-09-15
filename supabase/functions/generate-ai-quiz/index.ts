@@ -6,7 +6,6 @@ const cors = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Gemini 3.5 Flash-Lite is the current low-cost/high-throughput model and supports structured output.
 const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
@@ -39,17 +38,31 @@ const schema = {
   required: ['questions'],
 };
 
+function normalizeText(value: unknown) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
 function fingerprint(q: any) {
   return [q.stem, ...(q.options || [])].join(' ').toLowerCase()
     .normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 function validateQuestion(q: any) {
-  if (!q || typeof q.stem !== 'string' || q.stem.length < 15) return false;
+  if (!q || typeof q.stem !== 'string' || normalizeText(q.stem).length < 20) return false;
   if (!Array.isArray(q.options) || q.options.length !== 4) return false;
-  if (new Set(q.options.map((x: string) => x.trim().toLowerCase())).size !== 4) return false;
+  const options = q.options.map(normalizeText);
+  if (options.some((x: string) => x.length < 1 || x.length > 500)) return false;
+  if (new Set(options.map((x: string) => x.toLowerCase().normalize('NFKC'))).size !== 4) return false;
   if (![0,1,2,3].includes(q.correct_option)) return false;
-  if (typeof q.explanation !== 'string' || q.explanation.length < 10) return false;
+  if (typeof q.explanation !== 'string' || normalizeText(q.explanation).length < 20) return false;
+  if (typeof q.common_mistake !== 'string' || normalizeText(q.common_mistake).length < 10) return false;
+  if (!['easy','medium','hard','elite'].includes(q.difficulty)) return false;
+  if (typeof q.unit !== 'string' || normalizeText(q.unit).length < 1) return false;
+  if (typeof q.lesson !== 'string' || normalizeText(q.lesson).length < 1) return false;
+  if (typeof q.concept !== 'string' || normalizeText(q.concept).length < 1) return false;
+  if (typeof q.skill !== 'string' || normalizeText(q.skill).length < 1) return false;
+  if (typeof q.source_basis !== 'string' || normalizeText(q.source_basis).length < 1) return false;
+  if (!Number.isInteger(q.estimated_seconds) || q.estimated_seconds < 20 || q.estimated_seconds > 600) return false;
   return true;
 }
 
@@ -72,11 +85,11 @@ async function main(req: Request) {
   }
 
   const body = await req.json();
-  const subject = String(body.subject || '').trim();
-  const branch = String(body.branch || '').trim() || null;
-  const unit = String(body.unit || '').trim() || null;
-  const lesson = String(body.lesson || '').trim() || null;
-  const difficulty = String(body.difficulty || 'medium');
+  const subject = normalizeText(body.subject);
+  const branch = normalizeText(body.branch) || null;
+  const unit = normalizeText(body.unit) || null;
+  const lesson = normalizeText(body.lesson) || null;
+  const difficulty = normalizeText(body.difficulty || 'medium');
   const count = Math.min(Math.max(Number(body.count || 10), 1), 20);
   const userId = body.user_id || null;
 
@@ -93,9 +106,9 @@ async function main(req: Request) {
     .select('stem,options,fingerprint')
     .eq('subject', subject)
     .eq('grade', 'الصف الثالث الثانوي')
-    .eq('status', 'approved')
+    .in('status', ['approved', 'review'])
     .order('created_at', { ascending: false })
-    .limit(200);
+    .limit(300);
 
   const sourceContext = (sources || []).map((s: any) => ({
     title: s.title,
@@ -105,16 +118,26 @@ async function main(req: Request) {
     url: s.url,
     content: s.content ? s.content.slice(0, 12000) : null,
   }));
-  const avoid = (existing || []).slice(0, 80).map((q: any) => q.stem).join('\n- ');
+  const avoid = (existing || []).slice(0, 120).map((q: any) => normalizeText(q.stem)).filter(Boolean).join('\n- ');
 
-  const instructions = `أنت محرك أسئلة لتطبيق "رحلة الثانوية" للصف الثالث الثانوي المصري.\n\n` +
-    `مهمتك: إنشاء أسئلة أصلية جديدة، وليست نسخًا حرفيًا من أي كتاب أو منصة أو امتحان.\n` +
-    `ابنِ السؤال من المفهوم والمهارة ونمط التقييم الموجود في المصادر المرجعية. لا تنسب نصًا محميًا أو سؤالًا بعينه إلى مصدر.\n` +
-    `الالتزام الصارم بمنهج الصف الثالث الثانوي المصري والشعبة المطلوبة. ممنوع إدخال معلومات جامعية أو خارج المنهج.\n` +
-    `كل سؤال MCQ له 4 اختيارات وإجابة صحيحة واحدة فقط. المشتتات يجب أن تكون أخطاء شائعة منطقية وليست عشوائية.\n` +
-    `نوّع الصعوبة ومستوى التفكير، وغيّر السياق والأرقام والترتيب حتى لا تتكرر الأسئلة.\n` +
-    `إذا كانت المصادر غير كافية لتحديد معلومة منهجية، لا تخترعها؛ استخدم فقط ما يمكن دعمه بالمراجع المتاحة.\n` +
-    `أعد JSON مطابقًا للمخطط المطلوب فقط.`;
+  const instructions = `أنت محرك أسئلة احترافي لتطبيق "رحلة الثانوية" للصف الثالث الثانوي المصري.\n\n` +
+    `الهدف: إنتاج أسئلة MCQ أصلية عالية الجودة، مطابقة للمنهج المصري الحالي، وليست أسئلة عامة مولدة عشوائياً.\n\n` +
+    `قواعد إلزامية:\n` +
+    `1) اعتمد أولاً على المصادر المرجعية المرسلة في الطلب، ثم على المعرفة المنهجية الموثوقة المتوافقة معها. إذا لم توجد معلومة كافية فلا تخترعها.\n` +
+    `2) التزم بالصف الثالث الثانوي المصري وبالشعبة المحددة. ممنوع إدخال محتوى جامعي أو موضوعات من صفوف أخرى أو معلومات خارج نطاق المنهج.\n` +
+    `3) قبل كتابة كل سؤال، حدد في ذهنك الدرس والمفهوم والمهارة التي يقيسها. يجب أن تكون هذه البيانات حقيقية ومطابقة لموضوع السؤال، وليست عناوين عامة مصطنعة.\n` +
+    `4) كل سؤال له 4 اختيارات مختلفة، وإجابة صحيحة واحدة فقط. تحقق بنفسك أن الاختيارات الأخرى خاطئة أو أقل دقة بوضوح وفق المنهج. لا تستخدم اختياراً يمكن اعتباره صحيحاً أيضاً.\n` +
+    `5) المشتتات يجب أن تمثل أخطاء شائعة أو خلطاً بين مفاهيم متقاربة، وليست إجابات عبثية أو مضحكة أو مكشوفة بسهولة.\n` +
+    `6) لا تضع الإجابة الصحيحة دائماً في نفس الموضع. وزّع correct_option بين 0 و1 و2 و3 قدر الإمكان.\n` +
+    `7) لا تكرر السؤال أو نفس الفكرة بصياغة سطحية مختلفة. غيّر السياق أو المعطيات أو زاوية القياس عند الحاجة. تجنب كل الأسئلة الموجودة في قائمة التجنب.\n` +
+    `8) الشرح يجب أن يبرهن لماذا الإجابة الصحيحة صحيحة، ويذكر القاعدة أو الفكرة المنهجية ذات الصلة عند الحاجة. لا تكتب شرحاً عاماً لا يثبت الإجابة.\n` +
+    `9) common_mistake يجب أن يصف خطأً حقيقياً قد يقع فيه طالب، وليس تعليقاً عاماً مثل "عدم فهم السؤال".\n` +
+    `10) راجع اللغة العربية والإملاء والنحو وعلامات الترقيم قبل الإخراج. ممنوع أخطاء مثل: "اسم فعمل" أو كلمات مشوهة أو مصطلحات غير صحيحة.\n` +
+    `11) في النحو والبلاغة والأدب، لا تعتمد على الانطباع؛ طبّق القاعدة العربية المحددة ثم راجعها مرة ثانية قبل اختيار الإجابة. إذا كان السؤال يحتمل أكثر من إجابة صحيحة فأعد صياغته.\n` +
+    `12) في النصوص، لا تنسب اقتباساً حرفياً إلى مصدر إلا إذا ورد في المرجع المرسل. وإذا لم يتوفر النص الأصلي فلا تخترع أبياتاً أو نسباً أو أرقاماً.\n` +
+    `13) difficulty يجب أن تعكس صعوبة الحل فعلياً، وcognitive_level يصف عملية التفكير المطلوبة مثل تذكر/فهم/تطبيق/تحليل/استنتاج.\n` +
+    `14) نفّذ تدقيقاً نهائياً صامتاً لكل سؤال: هل هو من المنهج؟ هل له إجابة واحدة؟ هل الشرح صحيح؟ هل اللغة سليمة؟ هل لا يوجد تكرار؟ إذا فشل سؤال في أي بند، أصلحه قبل إخراجه.\n` +
+    `أخرج JSON مطابقاً للمخطط فقط، دون أي نص إضافي.`;
 
   const userInput = {
     request: { subject, grade: 'الصف الثالث الثانوي', branch, unit, lesson, difficulty, count },
@@ -148,7 +171,7 @@ async function main(req: Request) {
       generationConfig: {
         response_mime_type: 'application/json',
         response_schema: schema,
-        temperature: 0.7,
+        temperature: 0.45,
       },
     }),
   });
@@ -186,11 +209,24 @@ async function main(req: Request) {
     return jsonResponse({ error: 'Invalid AI output' }, 502);
   }
 
-  const clean = (parsed.questions || []).filter(validateQuestion);
+  const clean = (parsed.questions || []).filter(validateQuestion).map((q: any) => ({
+    ...q,
+    stem: normalizeText(q.stem),
+    options: q.options.map(normalizeText),
+    explanation: normalizeText(q.explanation),
+    common_mistake: normalizeText(q.common_mistake),
+    unit: normalizeText(q.unit),
+    lesson: normalizeText(q.lesson),
+    concept: normalizeText(q.concept),
+    skill: normalizeText(q.skill),
+    source_basis: normalizeText(q.source_basis),
+  }));
+
   const seen = new Set<string>();
+  const existingFingerprints = new Set((existing || []).map((q: any) => q.fingerprint || fingerprint(q)));
   const fresh = clean.filter((q: any) => {
     const fp = fingerprint(q);
-    if (seen.has(fp)) return false;
+    if (seen.has(fp) || existingFingerprints.has(fp)) return false;
     seen.add(fp);
     return true;
   }).slice(0, count);
@@ -214,7 +250,7 @@ async function main(req: Request) {
       common_mistake: q.common_mistake,
       estimated_seconds: q.estimated_seconds,
       fingerprint: fingerprint(q),
-      quality_score: 95,
+      quality_score: 100,
       status: 'approved',
       model: MODEL,
       generation_run_id: runId,
