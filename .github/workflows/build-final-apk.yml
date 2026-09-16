@@ -1,93 +1,67 @@
-name: Build Clean Thanwia APK
+name: Build Thanwia-New APK
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify single navigation architecture and friend challenge module
+
+      - name: Verify Thanwia-New is standalone
         shell: bash
         run: |
           set -e
-          grep -q 'app-navigation-bootstrap.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          grep -q 'app-core-v10.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          grep -q 'app-setup-v13.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          grep -q 'app-navigation-hard-v4.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          grep -q 'friend-challenge-v2.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          grep -q 'friend-challenge-buttons-fix-v1.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          ! grep -q 'app-navigation-final.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          ! grep -q 'app-core-v12.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          ! grep -q 'app-navigation-v14.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          ! grep -q 'app-core-v9.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          ! grep -q 'app-core-v8.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
-          test -s android_project/app/src/main/assets/www/app-navigation-bootstrap.js
-          test -s android_project/app/src/main/assets/www/app-navigation-hard-v4.js
-          test -s android_project/app/src/main/assets/www/app-setup-v13.js
-          test -s android_project/app/src/main/assets/www/friend-challenge-v2.js
-          test -s android_project/app/src/main/assets/www/friend-challenge-buttons-fix-v1.js
-      - name: Normalize Supabase key and remove duplicated CSS
-        shell: bash
-        run: |
-          set -e
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('android_project/app/src/main/assets/www/index.html')
-          s=p.read_text(encoding='utf-8')
-          good='sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0'
-          bad='sb_publishable_FqI5heK77syr-3QH2LPHg_E82vbq-0'
-          s=s.replace(bad,good)
-          block='.review-due{background:#fff7e6;border:1px solid #ffd27a;border-radius:15px;padding:11px;margin-top:10px}.review-done{background:#eefaf5;border:1px solid #b9ead5;border-radius:15px;padding:10px;margin-top:10px}'
-          s=s.replace(block,'')
-          marker='.error-item:last-child{border:0}'
-          if marker not in s: raise SystemExit('CSS marker not found')
-          s=s.replace(marker,marker+block,1)
-          p.write_text(s,encoding='utf-8')
-          assert bad not in s and good in s
-          assert s.count('.review-due{') == 1
-          assert s.count('.review-done{') == 1
-          PY
+          test -s android_project/app/src/main/assets/www/index.html
+          test -s android_project/app/src/main/assets/www/thanwia-new-app.js
+          test -s android_project/app/src/main/assets/www/ai-question-engine.js
+          grep -q 'Thanwia-New' android_project/app/src/main/assets/www/index.html
+          grep -q 'thanwia-new-app.js' android_project/app/src/main/assets/www/index.html
+          grep -q 'file:///android_asset/www/index.html' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
+          ! grep -q 'app-navigation-bootstrap.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
+          ! grep -q 'app-core-v10.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
+          ! grep -q 'friend-challenge-v2.js' android_project/app/src/main/java/com/rihla/thanaweya/MainActivity.java
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10'
+
       - name: Build APK
         run: gradle --no-daemon -p android_project :app:assembleDebug
-      - name: Verify APK
+
+      - name: Verify clean APK
         shell: bash
         run: |
           set -e
           APK=android_project/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          unzip -p "$APK" assets/www/app-navigation-bootstrap.js | grep -q '__rihlaNavigationReserved'
-          unzip -p "$APK" assets/www/app-navigation-hard-v4.js | grep -q '__rihlaHardNavV4'
-          unzip -p "$APK" assets/www/app-setup-v13.js | grep -q '__rihlaSetupV13'
-          unzip -p "$APK" assets/www/friend-challenge-v2.js | grep -q '__friendChallengeV2'
-          unzip -p "$APK" assets/www/friend-challenge-v2.js | grep -q 'fc2_create_challenge'
-          unzip -p "$APK" assets/www/friend-challenge-v2.js | grep -q 'fc2_start_challenge'
-          unzip -p "$APK" assets/www/friend-challenge-v2.js | grep -q 'fc2_answer'
-          unzip -p "$APK" assets/www/friend-challenge-buttons-fix-v1.js | grep -q '__rihlaFriendChallengeButtonsFixV1'
-          unzip -p "$APK" assets/www/friend-challenge-buttons-fix-v1.js | grep -q 'RIHLA_FC2'
-          unzip -p "$APK" assets/www/index.html | grep -q 'sb_publishable_FqI5heK77syr-3QHh2LPHg_E82vbq-0'
-          ! unzip -l "$APK" | grep -q 'assets/www/app-navigation-final.js'
-          ! unzip -l "$APK" | grep -q 'assets/www/app-core-v12.js'
-          ! unzip -l "$APK" | grep -q 'assets/www/app-navigation-v14.js'
-          ! unzip -l "$APK" | grep -q 'assets/www/app-core-v9.js'
-          ! unzip -l "$APK" | grep -q 'assets/www/subscription.js'
-          test "$(unzip -p "$APK" assets/www/index.html | grep -o '\.review-due{' | wc -l)" -eq 1
-          test "$(unzip -p "$APK" assets/www/index.html | grep -o '\.review-done{' | wc -l)" -eq 1
+          unzip -p "$APK" assets/www/index.html | grep -q 'Thanwia-New'
+          unzip -p "$APK" assets/www/thanwia-new-app.js | grep -q 'aenuzbaqskhyqwatrggg.supabase.co'
+          unzip -p "$APK" assets/www/ai-question-engine.js | grep -q 'generate-ai-quiz'
+          ! unzip -l "$APK" | grep -q 'assets/www/app-navigation-bootstrap.js'
+          ! unzip -l "$APK" | grep -q 'assets/www/app-core-v10.js'
+          ! unzip -l "$APK" | grep -q 'assets/www/friend-challenge-v2.js'
+          ! unzip -l "$APK" | grep -q 'assets/www/subscription-v2.js'
+          ! unzip -l "$APK" | grep -q 'assets/www/3d-modern.css'
+
       - uses: actions/upload-artifact@v4
         with:
-          name: Thanwia-Friend-Challenge-V2-APK
+          name: Thanwia-New-clean-APK
           path: android_project/app/build/outputs/apk/debug/app-debug.apk
